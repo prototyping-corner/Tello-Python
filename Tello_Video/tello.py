@@ -1,8 +1,17 @@
 import socket
 import threading
-import time
+# import time
 import numpy as np
+import rospy
 import libh264decoder
+from std_msgs.msg import String
+from sensor_msgs.msg import Image
+import cv2
+from cv_bridge import CvBridge
+import queue
+import datetime
+# import pdb
+
 
 class Tello:
     """Wrapper class to interact with the Tello drone."""
@@ -25,7 +34,7 @@ class Tello:
         self.decoder = libh264decoder.H264Decoder()
         self.command_timeout = command_timeout
         self.imperial = imperial
-        self.response = None  
+        self.response = None
         self.frame = None  # numpy array BGR -- current camera output frame
         self.is_freeze = False  # freeze current camera output
         self.last_frame = None
@@ -36,17 +45,38 @@ class Tello:
         self.last_height = 0
         self.socket.bind((local_ip, local_port))
 
-        # thread for receiving cmd ack
-        self.receive_thread = threading.Thread(target=self._receive_thread)
-        self.receive_thread.daemon = True
+        self.take_video = False  # determines if frames are saved to be turned into video
 
+        self.frame_queue = queue.Queue()
+        self.filtered_queue = queue.Queue()
+        self.video_frames = queue.Queue()
+
+        self.list_video_frames = []
+
+        self.bridge = CvBridge()  # functions which convert between the ROS Image format and the cv2 Mat
+
+        self.codec = cv2.VideoWriter.fourcc(*"X264")
+
+        self.receive_thread = threading.Thread(target=self._receive_thread)
+
+        self.receive_thread.daemon = True
         self.receive_thread.start()
+
+        self.publish_thread = threading.Thread(target=self._ros_publish_thread)  # thread to publish to camera topic
+        self.publish_thread.daemon = True
+        self.publish_thread.start()
+
+        rospy.init_node("test", anonymous=True)
+        self.pub = rospy.Publisher("camera", Image, queue_size=5)
+        self.filter_pub = rospy.Publisher("filter", String, queue_size=5)
+
+        self.subscriber = rospy.Subscriber("frames", Image, self.callback, queue_size=5)
 
         # to receive video -- send cmd: command, streamon
         self.socket.sendto(b'command', self.tello_address)
-        print ('sent: command')
+        print('sent: command')
         self.socket.sendto(b'streamon', self.tello_address)
-        print ('sent: streamon')
+        print('sent: streamon')
 
         self.socket_video.bind((local_ip, self.local_video_port))
 
@@ -61,7 +91,7 @@ class Tello:
 
         self.socket.close()
         self.socket_video.close()
-    
+
     def read(self):
         """Return the last frame from camera."""
         if self.is_freeze:
@@ -84,9 +114,9 @@ class Tello:
         while True:
             try:
                 self.response, ip = self.socket.recvfrom(3000)
-                #print(self.response)
+                # print(self.response)
             except socket.error as exc:
-                print ("Caught exception socket.error : %s" % exc)
+                print("Caught except TypeErrorion socket.error : %s" % exc)
 
     def _receive_video_thread(self):
         """
@@ -103,18 +133,61 @@ class Tello:
                 # end of frame
                 if len(res_string) != 1460:
                     for frame in self._h264_decode(packet_data):
-                        self.frame = frame
+                        self.frame_queue.put(frame)
+                        rgb = self.filtered_queue.get()
+                        self.frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)  # frame comes in RGB format and needs to be converted to BGR
+                        # if self.take_video:
+                            # self.list_video_frames[self.num_videos].append(frame)
+
                     packet_data = ""
 
             except socket.error as exc:
-                print ("Caught exception socket.error : %s" % exc)
-    
+                print("Caught except TypeErrorion socket.error : %s" % exc)
+
+    def _ros_publish_thread(self):
+        """ publishes frames put into frame_queue to the camera topic """
+        while not rospy.is_shutdown():
+            frame = self.frame_queue.get()
+            cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            ros_image = self.bridge.cv2_to_imgmsg(cv2_frame, encoding="passthrough")
+
+            rospy.loginfo("sent frame")
+            self.pub.publish(ros_image)
+
+    def callback(self, filtered_image):
+        """ is called when the Subscriber recieves a frame """
+        rospy.loginfo("recieved frame")
+
+        cv_output = self.bridge.imgmsg_to_cv2(filtered_image, desired_encoding="passthrough")
+        self.filtered_queue.put(cv_output)
+
+    def filter_change(self, selection):
+        """ attached to button and publishes selection of filter to filter ros topic """
+        self.filter_pub.publish(selection)
+
+    def toggle_video(self):
+        self.take_video = not(self.take_video)
+
+    def combine_frames(self):
+        """combines frames in self.list_video_frames into videos """
+        # path = "../video"
+
+        current_time = datetime.datetime.now()
+
+        filename = "{0}_{1}_{2}_{3}.mp4".format(current_time.year, current_time.day, current_time.hour, current_time.day)
+        out = cv2.VideoWriter(filename, 24, 0x00000021, (720, 960))
+
+        for frame in self.list_video_frames:
+            out.write(frame)
+
+        out.release()
+
     def _h264_decode(self, packet_data):
         """
         decode raw h264 format data from Tello
-        
+
         :param packet_data: raw h264 data array
-       
+
         :return: a list of decoded frame
         """
         res_frame_list = []
@@ -140,7 +213,7 @@ class Tello:
 
         """
 
-        print (">> send cmd: {}".format(command))
+        print(">> send cmd: {}".format(command))
         self.abort_flag = False
         timer = threading.Timer(self.command_timeout, self.set_abort_flag)
 
@@ -151,7 +224,7 @@ class Tello:
             if self.abort_flag is True:
                 break
         timer.cancel()
-        
+
         if self.response is None:
             response = 'none_response'
         else:
@@ -160,13 +233,13 @@ class Tello:
         self.response = None
 
         return response
-    
+
     def set_abort_flag(self):
         """
         Sets self.abort_flag to True.
 
         Used by the timer in Tello.send_command() to indicate to that a response
-        
+
         timeout has occurred.
 
         """
@@ -276,7 +349,7 @@ class Tello:
         try:
             height = int(height)
             self.last_height = height
-        except:
+        except TypeError:
             height = self.last_height
             pass
         return height
@@ -288,12 +361,12 @@ class Tello:
             int: Percent battery life remaining.
 
         """
-        
+
         battery = self.send_command('battery?')
 
         try:
             battery = int(battery)
-        except:
+        except TypeError:
             pass
 
         return battery
@@ -310,7 +383,7 @@ class Tello:
 
         try:
             flight_time = int(flight_time)
-        except:
+        except TypeError:
             pass
 
         return flight_time
@@ -332,7 +405,7 @@ class Tello:
                 speed = round((speed / 44.704), 1)
             else:
                 speed = round((speed / 27.7778), 1)
-        except:
+        except TypeError:
             pass
 
         return speed
@@ -457,3 +530,6 @@ class Tello:
         """
 
         return self.move('up', distance)
+
+    def shutdown_ros(self):
+        rospy.signal_shutdown("closing gui")
