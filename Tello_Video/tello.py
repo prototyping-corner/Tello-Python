@@ -66,7 +66,7 @@ class Tello:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        rospy.init_node("test", anonymous=True)
+        rospy.init_node("tello_object", anonymous=True)
         self.pub = rospy.Publisher("camera", Image, queue_size=5)
         self.filter_pub = rospy.Publisher("filter", String, queue_size=5)
 
