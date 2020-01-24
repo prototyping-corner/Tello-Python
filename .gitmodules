@@ -1,0 +1,3 @@
+[submodule "YOLO-LITE"]
+	path = YOLO-LITE
+	url = https://github.com/reu2018DL/YOLO-LITE
