@@ -15,13 +15,15 @@ class Yolo:
 
         self.classes = None
 
-        with open("./YOLO-LITE/coco_classes.txt", 'r') as f:
+        # https://www.arunponnusamy.com/yolo-object-detection-opencv-python.html
+
+        with open("../YOLO-LITE/coco_classes.txt", 'r') as f:
             self.classes = [line.strip() for line in f.readlines()]
 
         # generate different colors for different classes
         self.COLORS = np.random.uniform(0, 255, size=(len(self.classes), 3))
         # read pre-trained model and config file
-        self.net = cv2.dnn.readNet("./YOLO-LITE/cocoweights/trial6_342850.weights", "./YOLO-LITE/cococfg/trial6.cfg")
+        self.net = cv2.dnn.readNet("../YOLO-LITE/cocoweights/trial6_342850.weights", "../YOLO-LITE/cococfg/trial6.cfg")
 
     def callback(self, frame):
 
