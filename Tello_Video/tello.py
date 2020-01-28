@@ -134,8 +134,7 @@ class Tello:
                 if len(res_string) != 1460:
                     for frame in self._h264_decode(packet_data):
                         self.frame_queue.put(frame)
-                        rgb = self.filtered_queue.get()
-                        self.frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)  # frame comes in RGB format and needs to be converted to BGR
+                        # rgb = self.filtered_queue.get()
                         # if self.take_video:
                             # self.list_video_frames[self.num_videos].append(frame)
 
@@ -159,7 +158,7 @@ class Tello:
         rospy.loginfo("recieved frame")
 
         cv_output = self.bridge.imgmsg_to_cv2(filtered_image, desired_encoding="passthrough")
-        self.filtered_queue.put(cv_output)
+        self.frame = cv2.cvtColor(cv_output, cv2.COLOR_RGB2BGR)  # frame comes in RGB format and needs to be converted to BGR
 
     def filter_change(self, selection):
         """ attached to button and publishes selection of filter to filter ros topic """

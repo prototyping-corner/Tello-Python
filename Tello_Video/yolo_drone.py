@@ -17,7 +17,7 @@ class Yolo:
 
         # https://www.arunponnusamy.com/yolo-object-detection-opencv-python.html
 
-        with open("../YOLO-LITE/coco_classes.txt", 'r') as f:
+        with open("coco_classes.txt", 'r') as f:
             self.classes = [line.strip() for line in f.readlines()]
 
         # generate different colors for different classes

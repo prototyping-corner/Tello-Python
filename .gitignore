@@ -2,3 +2,5 @@
 *.DS_Store
 *.dat
 *.caffemodel
+Tello_Video/h264decoder/*
+Tello_Video/libh264decoder.so
