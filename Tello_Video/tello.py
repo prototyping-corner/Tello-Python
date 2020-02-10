@@ -194,7 +194,8 @@ class Tello:
         for framedata in frames:
             (frame, w, h, ls) = framedata
             if frame is not None:
-                # print 'frame size %i bytes, w %i, h %i, linesize %i' % (len(frame), w, h, ls)
+                print 'frame size %i bytes, w %i, h %i, linesize %i' % (len(frame), w, h, ls)
+                # pdb.set_trace()
 
                 frame = np.fromstring(frame, dtype=np.ubyte, count=len(frame), sep='')
                 frame = (frame.reshape((h, ls / 3, 3)))
