@@ -1,6 +1,9 @@
 import cv2
 import socket
 import numpy as np
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
 
 UDP_IP = '192.168.10.1'
 UDP_PORT = 8889
@@ -14,6 +17,11 @@ VS_UDP_PORT = 11111
 
 clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 clientSocket.bind(('0.0.0.0', UDP_PORT))
+
+rospy.init_node("video_stream", anonymous=True)
+publisher = rospy.Publisher("video_stream", Image, queue_size=1)
+
+bridge = CvBridge()
 
 def get_udp_video_address():
     return 'udp://@' + VS_UDP_IP + ':' + str(VS_UDP_PORT)  # + '?overrun_nonfatal=1&fifo_size=5000'
@@ -69,18 +77,14 @@ if not cap.isOpened():
 
 grabbed, raw_frame = cap.read()
 
-stopped = False
 
-while not stopped:
-    if not grabbed or not cap.isOpened():
-        stopped = True
-    else:
-        (grabbed, raw_frame) = cap.read()
-        #frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
-        #frame = np.rot90(frame)
-        #frame = np.flipud(frame)
-        cv2.imshow('output', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+while not rospy.is_shutdown():
+    (grabbed, raw_frame) = cap.read()
+    frame = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
+    ros_image = bridge.cv2_to_imgmsg(frame, encoding="rgb8")
+    publisher.publish(ros_image)
+    rospy.loginfo("published frame")
+    #frame = np.rot90(frame)
+    #frame = np.flipud(frame)
+    # cv2.imshow('output', frame)
 
-print("End")
